@@ -1,0 +1,27 @@
+{
+  "id": "hiring-screening-ai",
+  "name": "Hiring Screening AI",
+  "owner": "People Operations",
+  "businessUnit": "HR",
+  "purpose": "Ranks job applications and recommends candidates for recruiter review.",
+  "users": ["recruiters", "hiring managers"],
+  "affectedGroups": ["job applicants"],
+  "modelProviders": ["internal model", "external LLM"],
+  "dataCategories": ["CV", "application answers", "interview notes"],
+  "personalData": true,
+  "specialCategoryData": false,
+  "automatedDecisions": true,
+  "humanOversight": false,
+  "publicFacing": false,
+  "safetyCritical": false,
+  "employmentOrEducationUse": true,
+  "biometricUse": false,
+  "lawEnforcementUse": false,
+  "criticalInfrastructureUse": false,
+  "documentation": ["model-card", "vendor-security-review"],
+  "evidence": {
+    "ai-policy": "approved-ai-policy-v1.pdf",
+    "rbac-matrix": "hr-ai-rbac.csv",
+    "audit-logging": "enabled"
+  }
+}
