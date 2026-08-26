@@ -1,0 +1,42 @@
+name: Sign Release Assets
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  sign-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          persist-credentials: false
+      - uses: sigstore/cosign-installer@d58896d6a1865668819e1d91763c7751a165e159
+      - run: tar --exclude='.git' -czf "${{ github.event.repository.name }}-${{ github.event.release.tag_name }}.tar.gz" .
+      - uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610
+        with:
+          path: .
+          format: spdx-json
+          output-file: sbom.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+      - uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: sbom.cdx.json
+          upload-artifact: false
+          upload-release-assets: false
+      - run: sha256sum "${{ github.event.repository.name }}-${{ github.event.release.tag_name }}.tar.gz" sbom.spdx.json sbom.cdx.json > SHA256SUMS
+      - run: cosign sign-blob --yes --bundle release.tar.gz.sigstore "${{ github.event.repository.name }}-${{ github.event.release.tag_name }}.tar.gz"
+      - run: cosign sign-blob --yes --bundle SHA256SUMS.sigstore SHA256SUMS
+      - run: cosign sign-blob --yes --bundle sbom.spdx.json.sigstore sbom.spdx.json
+      - run: cosign sign-blob --yes --bundle sbom.cdx.json.sigstore sbom.cdx.json
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" "${{ github.event.repository.name }}-${{ github.event.release.tag_name }}.tar.gz" SHA256SUMS sbom.spdx.json sbom.cdx.json release.tar.gz.sigstore SHA256SUMS.sigstore sbom.spdx.json.sigstore sbom.cdx.json.sigstore --clobber
