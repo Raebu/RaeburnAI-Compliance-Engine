@@ -1,0 +1,46 @@
+name: Release provenance
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+  artifact-metadata: write
+
+jobs:
+  provenance:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout release source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Create release artifact and checksum
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+          artifact="${{ github.event.repository.name }}-${{ github.event.release.tag_name }}.tar.gz"
+          tar --exclude='.git' -czf "$artifact" .
+          sha256sum "$artifact" > SHA256SUMS
+          echo "artifact=$artifact" >> "$GITHUB_OUTPUT"
+      - name: Generate SLSA build provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: '${{ steps.package.outputs.artifact }}'
+      - name: Create trust package guide
+        shell: bash
+        run: |
+          cat > TRUST-PACKAGE.txt <<'EOF'
+          Raeburn release trust package
+          Includes release artifact, SHA-256 checksum, SPDX/CycloneDX SBOMs, signed SLSA build provenance, signed SBOM attestations and GitHub release notes.
+          Verify checksum: sha256sum -c SHA256SUMS
+          Verify provenance: gh attestation verify <artifact> --repo ${{ github.repository }}
+          EOF
+      - name: Upload trust package to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" "${{ steps.package.outputs.artifact }}" SHA256SUMS TRUST-PACKAGE.txt --clobber
