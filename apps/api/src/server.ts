@@ -5,6 +5,7 @@ import rateLimit from '@fastify/rate-limit';
 import { ZodError } from 'zod';
 import {
   assessSystem,
+  buildReleaseGovernanceApplicabilitySnapshot,
   buildReleaseInventorySnapshot,
   buildRemediationRoadmap,
   rules
@@ -37,6 +38,10 @@ export function buildServer() {
     return { snapshot: buildReleaseInventorySnapshot(request.body) };
   });
 
+  app.post('/v1/governance/release-applicability', async request => {
+    return { snapshot: buildReleaseGovernanceApplicabilitySnapshot(request.body) };
+  });
+
   app.get('/v1/openapi.json', async () => ({
     openapi: '3.1.0',
     info: { title: 'RaeburnAI Compliance Engine API', version: '0.1.0' },
@@ -46,6 +51,11 @@ export function buildServer() {
       '/v1/assessments/run': { post: { summary: 'Run AI compliance assessment' } },
       '/v1/inventory/release-snapshot': {
         post: { summary: 'Build a release-scoped AI system inventory and risk snapshot' }
+      },
+      '/v1/governance/release-applicability': {
+        post: {
+          summary: 'Screen a release inventory for EU AI Act and UK AI governance applicability'
+        }
       }
     }
   }));
