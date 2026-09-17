@@ -27,7 +27,7 @@ export function assessSystem(input: unknown): AssessmentResult {
       severity: rule.severity,
       passed,
       evidenceRequired: rule.evidenceRequired,
-      remediation: passed ? undefined : rule.remediation,
+      ...(passed ? {} : { remediation: rule.remediation }),
       controlRefs: rule.controlRefs
     };
   });
