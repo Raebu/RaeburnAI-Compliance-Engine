@@ -2,6 +2,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
+import { ZodError } from 'zod';
 import {
   assessSystem,
   buildReleaseInventorySnapshot,
@@ -52,8 +53,9 @@ export function buildServer() {
   app.setErrorHandler((error, _request, reply) => {
     app.log.error(error);
     const candidate = error as { statusCode?: unknown };
-    const statusCode =
-      typeof candidate.statusCode === 'number' && candidate.statusCode >= 400
+    const statusCode = error instanceof ZodError
+      ? 400
+      : typeof candidate.statusCode === 'number' && candidate.statusCode >= 400
         ? candidate.statusCode
         : 500;
     const message = error instanceof Error ? error.message : 'Request failed';
