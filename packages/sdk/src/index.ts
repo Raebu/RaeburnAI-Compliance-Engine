@@ -34,6 +34,13 @@ export class ComplianceClient {
     });
   }
 
+  async buildReleaseGovernanceApplicabilitySnapshot(inventory: unknown) {
+    return this.request('/v1/governance/release-applicability', {
+      method: 'POST',
+      body: JSON.stringify(inventory)
+    });
+  }
+
   private async request(path: string, init: RequestInit = {}) {
     const headers = new Headers(init.headers);
     headers.set('content-type', 'application/json');
