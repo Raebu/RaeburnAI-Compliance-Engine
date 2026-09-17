@@ -1,0 +1,1 @@
+{"extends":"../../tsconfig.base.json","compilerOptions":{"noEmit":true,"baseUrl":"../..","paths":{"@raeburnai/compliance-core":["packages/core/src/index.ts"]}},"include":["src/**/*.ts","../../packages/core/src/**/*.ts"]}
