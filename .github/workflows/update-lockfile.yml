@@ -1,0 +1,34 @@
+name: Refresh dependency lockfile
+
+on:
+  push:
+    branches: [feat/supply-chain-hardening]
+
+permissions:
+  contents: write
+
+jobs:
+  lockfile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+      - name: Activate pinned pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@9.12.3 --activate
+      - name: Refresh lockfile from workspace manifests
+        run: pnpm install --lockfile-only --frozen-lockfile=false
+      - name: Commit lockfile when changed
+        run: |
+          if git diff --quiet -- pnpm-lock.yaml; then
+            echo 'Lockfile already matches manifests.'
+            exit 0
+          fi
+          git add pnpm-lock.yaml
+          git -c user.name='github-actions[bot]' \
+              -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+              commit -m 'build: refresh pnpm lockfile after security upgrades'
+          git push origin HEAD:feat/supply-chain-hardening
