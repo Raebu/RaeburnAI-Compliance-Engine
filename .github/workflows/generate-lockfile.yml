@@ -1,0 +1,31 @@
+name: Generate dependency lockfile
+
+on:
+  push:
+    branches: [feat/supply-chain-hardening]
+
+permissions:
+  contents: read
+
+jobs:
+  lockfile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Activate pinned pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@9.12.3 --activate
+          pnpm --version
+      - name: Generate lockfile from workspace manifests
+        run: pnpm install --lockfile-only --frozen-lockfile=false
+      - name: Upload generated lockfile
+        uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
+        with:
+          name: generated-pnpm-lock
+          path: pnpm-lock.yaml
+          if-no-files-found: error
+          retention-days: 1
