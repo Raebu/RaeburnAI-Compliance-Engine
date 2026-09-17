@@ -5,7 +5,7 @@ export interface ComplianceClientOptions {
 
 export class ComplianceClient {
   private readonly baseUrl: string;
-  private readonly token?: string;
+  private readonly token: string | undefined;
 
   constructor(options: ComplianceClientOptions) {
     this.baseUrl = options.baseUrl.replace(/\/$/, '');
@@ -24,6 +24,13 @@ export class ComplianceClient {
     return this.request('/v1/assessments/run', {
       method: 'POST',
       body: JSON.stringify(system)
+    });
+  }
+
+  async buildReleaseInventorySnapshot(inventory: unknown) {
+    return this.request('/v1/inventory/release-snapshot', {
+      method: 'POST',
+      body: JSON.stringify(inventory)
     });
   }
 

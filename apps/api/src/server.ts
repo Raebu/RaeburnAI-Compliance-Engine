@@ -2,7 +2,13 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
-import { assessSystem, buildRemediationRoadmap, rules } from '@raeburnai/compliance-core';
+import { ZodError } from 'zod';
+import {
+  assessSystem,
+  buildReleaseInventorySnapshot,
+  buildRemediationRoadmap,
+  rules
+} from '@raeburnai/compliance-core';
 
 const port = Number(process.env.PORT ?? 4000);
 const host = process.env.HOST ?? '0.0.0.0';
@@ -27,20 +33,35 @@ export function buildServer() {
     return { result, roadmap: buildRemediationRoadmap(result) };
   });
 
+  app.post('/v1/inventory/release-snapshot', async request => {
+    return { snapshot: buildReleaseInventorySnapshot(request.body) };
+  });
+
   app.get('/v1/openapi.json', async () => ({
     openapi: '3.1.0',
     info: { title: 'RaeburnAI Compliance Engine API', version: '0.1.0' },
     paths: {
       '/health': { get: { summary: 'Health check' } },
       '/v1/rules': { get: { summary: 'List compliance rules' } },
-      '/v1/assessments/run': { post: { summary: 'Run AI compliance assessment' } }
+      '/v1/assessments/run': { post: { summary: 'Run AI compliance assessment' } },
+      '/v1/inventory/release-snapshot': {
+        post: { summary: 'Build a release-scoped AI system inventory and risk snapshot' }
+      }
     }
   }));
 
   app.setErrorHandler((error, _request, reply) => {
     app.log.error(error);
-    const statusCode = error.statusCode && error.statusCode >= 400 ? error.statusCode : 500;
-    reply.status(statusCode).send({ error: statusCode === 500 ? 'Internal server error' : error.message });
+    const candidate = error as { statusCode?: unknown };
+    const statusCode = error instanceof ZodError
+      ? 400
+      : typeof candidate.statusCode === 'number' && candidate.statusCode >= 400
+        ? candidate.statusCode
+        : 500;
+    const message = error instanceof Error ? error.message : 'Request failed';
+    reply
+      .status(statusCode)
+      .send({ error: statusCode === 500 ? 'Internal server error' : message });
   });
 
   return app;
