@@ -45,6 +45,10 @@ for (const workflowFile of workflowFiles) {
 }
 
 read('pnpm-lock.yaml');
+const policy = read('docs/software-supply-chain.md');
+requireMarker(policy, 'docs/software-supply-chain.md', 'Critical remediation expectation', '**Critical:**');
+requireMarker(policy, 'docs/software-supply-chain.md', 'High remediation expectation', '**High:**');
+requireMarker(policy, 'docs/software-supply-chain.md', 'real-release evidence boundary', 'real release evidence');
 
 const ci = read('.github/workflows/ci.yml');
 requireMarker(ci, '.github/workflows/ci.yml', 'frozen dependency installation', 'pnpm install --frozen-lockfile');
@@ -89,5 +93,5 @@ if (failures.length > 0) {
 
 console.log(
   `Software supply-chain policy validated: ${workflowFiles.length} workflows use immutable action refs; ` +
-    'tracked lockfile, dependency/image gates, runtime smoke test, SBOM, signing and provenance controls are present.'
+    'tracked lockfile, documented remediation policy, dependency/image gates, runtime smoke test, SBOM, signing and provenance controls are present.'
 );
