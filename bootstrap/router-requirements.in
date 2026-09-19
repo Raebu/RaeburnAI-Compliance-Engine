@@ -1,0 +1,13 @@
+requests
+flask
+filelock
+pytest
+prometheus_client
+Flask-Limiter
+language_tool_python
+python-dotenv
+APScheduler
+
+PyJWT
+pytest-xdist
+flask-socketio
