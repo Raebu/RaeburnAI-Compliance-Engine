@@ -1,0 +1,93 @@
+name: Router supply-chain bootstrap
+
+on:
+  push:
+    branches:
+      - automation/router-supply-chain-bootstrap-20260919
+    paths:
+      - '.github/workflows/router-supply-chain-bootstrap.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout bootstrap branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: true
+
+      - name: Checkout exact Router source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: Raebu/RaeburnAI_llm_router
+          ref: 044865054b70ce0594838ca451a1f6207d452333
+          path: router
+          persist-credentials: false
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.11'
+
+      - name: Generate hashed Router Python lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p generated
+          python -m pip install --disable-pip-version-check --upgrade pip pip-tools pip-audit
+          pip-compile             --resolver=backtracking             --generate-hashes             --output-file generated/router-requirements.lock             router/requirements.txt
+          {
+            echo "router_commit=044865054b70ce0594838ca451a1f6207d452333"
+            python --version
+            pip-compile --version
+            pip-audit --version
+          } > generated/router-lock-metadata.txt
+
+      - name: Verify hashed lock and audit vulnerabilities
+        id: verify
+        shell: bash
+        run: |
+          set +e
+          python -m venv /tmp/router-lock-verify
+          /tmp/router-lock-verify/bin/python -m pip install --disable-pip-version-check --upgrade pip >/dev/null
+          /tmp/router-lock-verify/bin/python -m pip install             --disable-pip-version-check             --require-hashes             -r generated/router-requirements.lock             > generated/router-lock-install.txt 2>&1
+          install_status=$?
+          pip-audit             --progress-spinner off             -r generated/router-requirements.lock             > generated/router-pip-audit.txt 2>&1
+          audit_status=$?
+          set -e
+          echo "install_status=$install_status" >> generated/router-lock-metadata.txt
+          echo "audit_status=$audit_status" >> generated/router-lock-metadata.txt
+          echo "install_status=$install_status" >> "$GITHUB_OUTPUT"
+          echo "audit_status=$audit_status" >> "$GITHUB_OUTPUT"
+
+      - name: Capture current official Python base digest
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull python:3.11-slim
+          repo_digest="$(docker image inspect python:3.11-slim --format '{{index .RepoDigests 0}}')"
+          digest="${repo_digest#*@}"
+          test -n "$digest"
+          echo "python:3.11-slim@$digest" > generated/router-python-base.txt
+          docker image inspect python:3.11-slim             --format 'id={{.Id}} architecture={{.Architecture}} os={{.Os}}'             > generated/router-python-base-metadata.txt
+
+      - name: Persist bootstrap evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add generated/
+          git commit -m "chore: generate Router supply-chain bootstrap evidence"
+          git push
+
+      - name: Enforce generated dependency evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ steps.verify.outputs.install_status }}" = "0"
+          test "${{ steps.verify.outputs.audit_status }}" = "0"
