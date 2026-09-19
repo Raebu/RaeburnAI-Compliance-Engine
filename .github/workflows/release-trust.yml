@@ -1,0 +1,156 @@
+name: Release trust package
+
+on:
+  release:
+    types: [published]
+  workflow_call:
+    inputs:
+      release_tag:
+        description: Existing GitHub release tag to package and verify
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+  artifact-metadata: write
+
+concurrency:
+  group: release-trust-${{ inputs.release_tag || github.event.release.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  trust-package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      RELEASE_TAG: ${{ inputs.release_tag || github.event.release.tag_name }}
+    steps:
+      - name: Checkout exact release tag
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+
+      - name: Verify exact tag and source commit
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$RELEASE_TAG"
+          tag_commit="$(git rev-list -n 1 "$RELEASE_TAG")"
+          head_commit="$(git rev-parse HEAD)"
+          test "$tag_commit" = "$head_commit"
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null
+          echo "commit=$head_commit" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Build deterministic source archive
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo_name="${GITHUB_REPOSITORY#*/}"
+          safe_tag="${RELEASE_TAG//\//-}"
+          artifact="${repo_name}-${safe_tag}.tar.gz"
+          git archive --format=tar --prefix="${repo_name}-${safe_tag}/" HEAD | gzip -n > "$artifact"
+          echo "artifact=$artifact" >> "$GITHUB_OUTPUT"
+
+      - name: Generate SPDX SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610
+        with:
+          path: .
+          format: spdx-json
+          output-file: sbom.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Generate CycloneDX SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: sbom.cdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Create checksum manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha256sum "${{ steps.package.outputs.artifact }}" sbom.spdx.json sbom.cdx.json > SHA256SUMS
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@d58896d6a1865668819e1d91763c7751a165e159
+
+      - name: Sign exact release assets with Sigstore
+        shell: bash
+        run: |
+          set -euo pipefail
+          for asset in "${{ steps.package.outputs.artifact }}" SHA256SUMS sbom.spdx.json sbom.cdx.json; do
+            cosign sign-blob --yes --bundle "${asset}.sigstore" "$asset"
+          done
+
+      - name: Attest release archive provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: ${{ steps.package.outputs.artifact }}
+
+      - name: Attest SPDX SBOM to the exact archive
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: ${{ steps.package.outputs.artifact }}
+          sbom-path: sbom.spdx.json
+
+      - name: Attest CycloneDX SBOM to the exact archive
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: ${{ steps.package.outputs.artifact }}
+          sbom-path: sbom.cdx.json
+
+      - name: Verify checksums, Sigstore bundles and GitHub attestations
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          sha256sum -c SHA256SUMS
+          identity='^https://github\.com/Raebu/RaeburnAI-Compliance-Engine/\.github/workflows/release-trust\.yml@refs/(heads|tags)/.+$'
+          issuer='https://token.actions.githubusercontent.com'
+          for asset in "${{ steps.package.outputs.artifact }}" SHA256SUMS sbom.spdx.json sbom.cdx.json; do
+            cosign verify-blob               --bundle "${asset}.sigstore"               --certificate-identity-regexp "$identity"               --certificate-oidc-issuer "$issuer"               "$asset"
+          done
+          gh attestation verify "${{ steps.package.outputs.artifact }}" --repo "$GITHUB_REPOSITORY"
+
+      - name: Create trust package guide
+        shell: bash
+        run: |
+          cat > TRUST-PACKAGE.txt <<EOF
+          RaeburnAI Compliance Engine release trust package
+          Release tag: $RELEASE_TAG
+          Source commit: ${{ steps.source.outputs.commit }}
+
+          This release publishes one canonical source archive and one checksum manifest.
+          The SPDX and CycloneDX SBOM attestations, SLSA provenance and Sigstore bundles
+          all refer to the same archive bytes produced by this workflow.
+
+          Verify local checksums:
+            sha256sum -c SHA256SUMS
+
+          Verify GitHub provenance/SBOM attestations:
+            gh attestation verify ${{ steps.package.outputs.artifact }} --repo $GITHUB_REPOSITORY
+
+          Sigstore bundles are included beside every signed asset.
+          EOF
+
+      - name: Upload canonical trust package once
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release upload "$RELEASE_TAG"             "${{ steps.package.outputs.artifact }}"             SHA256SUMS             sbom.spdx.json             sbom.cdx.json             "${{ steps.package.outputs.artifact }}.sigstore"             SHA256SUMS.sigstore             sbom.spdx.json.sigstore             sbom.cdx.json.sigstore             TRUST-PACKAGE.txt             --clobber             --repo "$GITHUB_REPOSITORY"
