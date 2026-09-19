@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - name: Resolve official image digests
+      - name: Resolve official multi-platform image digests
         shell: bash
         run: |
           set -euo pipefail
@@ -24,8 +24,6 @@ jobs:
             "qdrant/qdrant:v1.12.6"
           )
           for image in "${images[@]}"; do
-            docker pull "$image" >/dev/null
             echo "IMAGE=$image"
-            docker image inspect "$image" --format 'REPO_DIGESTS={{join .RepoDigests ","}}'
-            docker image inspect "$image" --format 'IMAGE_ID={{.Id}}'
+            docker buildx imagetools inspect "$image" | sed -n '1,5p'
           done
