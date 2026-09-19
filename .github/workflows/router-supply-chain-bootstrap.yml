@@ -53,8 +53,10 @@ jobs:
           audit_status=$?
           set -e
           echo "install_status=$install_status" >> generated/router-lock-metadata.txt
+          echo "dev_install_status=$dev_install_status" >> generated/router-lock-metadata.txt
           echo "audit_status=$audit_status" >> generated/router-lock-metadata.txt
           echo "install_status=$install_status" >> "$GITHUB_OUTPUT"
+          echo "dev_install_status=$dev_install_status" >> "$GITHUB_OUTPUT"
           echo "audit_status=$audit_status" >> "$GITHUB_OUTPUT"
 
       - name: Capture current official Python base digest
@@ -83,4 +85,5 @@ jobs:
         run: |
           set -euo pipefail
           test "${{ steps.verify.outputs.install_status }}" = "0"
+          test "${{ steps.verify.outputs.dev_install_status }}" = "0"
           test "${{ steps.verify.outputs.audit_status }}" = "0"
