@@ -65,7 +65,7 @@ jobs:
         with:
           path: .
           format: spdx-json
-          output-file: sbom.spdx.json
+          output-file: /tmp/sbom.spdx.json
           upload-artifact: false
           upload-release-assets: false
 
@@ -74,9 +74,16 @@ jobs:
         with:
           path: .
           format: cyclonedx-json
-          output-file: sbom.cdx.json
+          output-file: /tmp/sbom.cdx.json
           upload-artifact: false
           upload-release-assets: false
+
+      - name: Stage canonical SBOM assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp /tmp/sbom.spdx.json sbom.spdx.json
+          cp /tmp/sbom.cdx.json sbom.cdx.json
 
       - name: Create checksum manifest
         shell: bash
