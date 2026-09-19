@@ -142,7 +142,7 @@ export function buildReleaseInventorySnapshot(
   const systems = [...request.systems]
     .sort((left, right) => left.system.id.localeCompare(right.system.id))
     .map(entry => {
-      const assessment = assessSystem(entry.system);
+      const assessment = assessSystem(entry.system, generatedAt);
       const missingEvidence = missingInventoryEvidence(entry);
       return {
         entry,
