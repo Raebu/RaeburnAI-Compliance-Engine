@@ -75,6 +75,30 @@ Duplicate AI system IDs are rejected so one release cannot silently contain conf
 }
 ```
 
+## Authenticated immutable evidence path
+
+The pure `POST /v1/inventory/release-snapshot` contract remains available for assessment and preview use. Operational release evidence uses the stricter `POST /v1/inventory/evidence` path.
+
+That endpoint requires `Authorization: Bearer <INVENTORY_REGISTRY_TOKEN>` and requires:
+
+- a full 40-character Git commit rather than an abbreviated SHA;
+- the source repository and exact ref;
+- the producer identity and `staging` or `production` environment;
+- an explicit capture timestamp;
+- the same typed system inventory used by the snapshot engine.
+
+The API canonicalises and SHA-256 hashes the evidence material before persistence. A retry with byte-equivalent governed evidence is idempotent. Reusing an existing release ID with different evidence fails with HTTP 409 instead of overwriting the prior record.
+
+Evidence is stored under `COMPLIANCE_EVIDENCE_DIR` using an opaque SHA-256-derived filename, so release IDs cannot become filesystem paths. Reads verify the stored content hash before returning evidence. The default local path is suitable for development; production deployments must mount this directory on durable, backed-up storage.
+
+Operational read endpoints are authenticated with the same registry token:
+
+- `GET /v1/inventory/evidence` lists persisted release evidence;
+- `GET /v1/inventory/evidence/:releaseId` retrieves one immutable record;
+- `GET /v1/inventory/exceptions` reports incomplete snapshots and snapshots older than `INVENTORY_MAX_AGE_SECONDS`.
+
+These exceptions are governance work items. Staleness or completeness does not itself determine legal compliance.
+
 ## Production integration still required
 
-RAI-115 is not complete until the current Chain/module/model registry actually supplies these records for a real release and the resulting snapshot is retained as release evidence. Production work should also authenticate the registry producer, bind snapshots to immutable release provenance, persist them in the evidence store and define ownership for stale or incomplete inventory entries.
+RAI-115 is not complete until the current Chain/module/model/tool registry actually submits a reviewed real release through the authenticated evidence path and the stored record is reconciled against the deployed estate. The new evidence store closes the authentication, immutable-provenance, persistence and stale/incomplete exception primitives in the Compliance Engine itself; remaining work is live producer wiring, durable production storage/backup operations, and the first verified release snapshot.
