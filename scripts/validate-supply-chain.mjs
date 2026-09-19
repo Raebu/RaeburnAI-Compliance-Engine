@@ -28,9 +28,12 @@ const workflowFiles = fs
   .filter(file => file.endsWith('.yml') || file.endsWith('.yaml'))
   .sort();
 
+const workflowSources = new Map();
+
 for (const workflowFile of workflowFiles) {
   const relativePath = `.github/workflows/${workflowFile}`;
   const source = read(relativePath);
+  workflowSources.set(relativePath, source);
   usesPattern.lastIndex = 0;
   for (const match of source.matchAll(usesPattern)) {
     const reference = match[1];
@@ -70,20 +73,53 @@ if (dockerfile.includes('CMD ["pnpm"')) {
   failures.push('Dockerfile runtime must not require pnpm');
 }
 
-const signing = read('.github/workflows/release-signing.yml');
-requireMarker(signing, '.github/workflows/release-signing.yml', 'keyless Sigstore signing', 'sigstore/cosign-installer@');
-requireMarker(signing, '.github/workflows/release-signing.yml', 'SPDX SBOM', 'spdx-json');
-requireMarker(signing, '.github/workflows/release-signing.yml', 'CycloneDX SBOM', 'cyclonedx-json');
-requireMarker(signing, '.github/workflows/release-signing.yml', 'release checksums', 'SHA256SUMS');
-requireMarker(signing, '.github/workflows/release-signing.yml', 'Sigstore bundles', '.sigstore');
+for (const legacyWorkflow of [
+  '.github/workflows/release-signing.yml',
+  '.github/workflows/provenance.yml'
+]) {
+  if (fs.existsSync(path.join(root, legacyWorkflow))) {
+    failures.push(`${legacyWorkflow} must be removed; release assets require one canonical owner`);
+  }
+}
 
-const provenance = read('.github/workflows/provenance.yml');
-requireMarker(provenance, '.github/workflows/provenance.yml', 'GitHub provenance attestation', 'actions/attest@');
+const releaseTrustPath = '.github/workflows/release-trust.yml';
+const releaseTrust = read(releaseTrustPath);
+requireMarker(releaseTrust, releaseTrustPath, 'published release trigger', 'types: [published]');
+requireMarker(releaseTrust, releaseTrustPath, 'reusable workflow entrypoint', 'workflow_call:');
+requireMarker(releaseTrust, releaseTrustPath, 'exact-tag checkout', 'ref: ${{ env.RELEASE_TAG }}');
+requireMarker(releaseTrust, releaseTrustPath, 'deterministic git archive', 'git archive --format=tar');
+requireMarker(releaseTrust, releaseTrustPath, 'deterministic gzip metadata', 'gzip -n');
+requireMarker(releaseTrust, releaseTrustPath, 'SPDX SBOM', 'spdx-json');
+requireMarker(releaseTrust, releaseTrustPath, 'CycloneDX SBOM', 'cyclonedx-json');
+requireMarker(releaseTrust, releaseTrustPath, 'release checksums', 'SHA256SUMS');
+requireMarker(releaseTrust, releaseTrustPath, 'keyless Sigstore signing', 'cosign sign-blob');
+requireMarker(releaseTrust, releaseTrustPath, 'Sigstore verification', 'cosign verify-blob');
+requireMarker(releaseTrust, releaseTrustPath, 'GitHub provenance/SBOM attestation', 'actions/attest@');
+requireMarker(releaseTrust, releaseTrustPath, 'GitHub attestation verification', 'gh attestation verify');
+requireMarker(releaseTrust, releaseTrustPath, 'single release upload', 'gh release upload');
+
+const releaseAssetOwners = [];
+for (const [relativePath, source] of workflowSources.entries()) {
+  const uploadsWithGh = source.includes('gh release upload');
+  const uploadsWithSbomAction = /upload-release-assets:\s*true/.test(source);
+  if (uploadsWithGh || uploadsWithSbomAction) releaseAssetOwners.push(relativePath);
+}
+if (
+  releaseAssetOwners.length !== 1 ||
+  releaseAssetOwners[0] !== releaseTrustPath
+) {
+  failures.push(
+    `release assets must have exactly one canonical workflow owner (${releaseTrustPath}); found: ${releaseAssetOwners.join(', ') || 'none'}`
+  );
+}
 
 const sbom = read('.github/workflows/sbom.yml');
 requireMarker(sbom, '.github/workflows/sbom.yml', 'repository SPDX SBOM generation', 'spdx-json');
 requireMarker(sbom, '.github/workflows/sbom.yml', 'repository CycloneDX SBOM generation', 'cyclonedx-json');
-requireMarker(sbom, '.github/workflows/sbom.yml', 'SBOM attestation', 'actions/attest@');
+requireMarker(sbom, '.github/workflows/sbom.yml', 'release upload disabled', 'upload-release-assets: false');
+if (/\brelease:\s*\n\s*types:\s*\[published\]/.test(sbom)) {
+  failures.push('.github/workflows/sbom.yml must not own release-event packaging');
+}
 
 if (failures.length > 0) {
   console.error('Software supply-chain policy validation failed:');
@@ -93,5 +129,5 @@ if (failures.length > 0) {
 
 console.log(
   `Software supply-chain policy validated: ${workflowFiles.length} workflows use immutable action refs; ` +
-    'tracked lockfile, documented remediation policy, dependency/image gates, runtime smoke test, SBOM, signing and provenance controls are present.'
+    'tracked lockfile, dependency/image gates, runtime smoke test and a single-owner verified release trust package are present.'
 );
