@@ -55,6 +55,23 @@ export const ReleaseInventoryRequestSchema = z.object({
 });
 export type ReleaseInventoryRequest = z.infer<typeof ReleaseInventoryRequestSchema>;
 
+export const ReleaseInventoryProvenanceSchema = z.object({
+  repository: z.string().url(),
+  commit: z.string().regex(/^[0-9a-f]{40}$/i),
+  ref: z.string().min(1),
+  producer: z.string().min(1),
+  environment: z.enum(['staging', 'production'])
+});
+export type ReleaseInventoryProvenance = z.infer<typeof ReleaseInventoryProvenanceSchema>;
+
+export const TrustedReleaseInventoryRequestSchema = z.object({
+  releaseId: z.string().min(1),
+  capturedAt: z.string().datetime({ offset: true }),
+  provenance: ReleaseInventoryProvenanceSchema,
+  systems: z.array(AISystemInventoryEntrySchema).min(1)
+});
+export type TrustedReleaseInventoryRequest = z.infer<typeof TrustedReleaseInventoryRequestSchema>;
+
 export interface InventorySystemSnapshot {
   entry: AISystemInventoryEntry;
   assessment: AssessmentResult;
@@ -125,7 +142,7 @@ export function buildReleaseInventorySnapshot(
   const systems = [...request.systems]
     .sort((left, right) => left.system.id.localeCompare(right.system.id))
     .map(entry => {
-      const assessment = assessSystem(entry.system);
+      const assessment = assessSystem(entry.system, generatedAt);
       const missingEvidence = missingInventoryEvidence(entry);
       return {
         entry,
@@ -164,4 +181,24 @@ export function buildReleaseInventorySnapshot(
     inventoryComplete: incompleteSystemIds.length === 0,
     systems
   };
+}
+
+export interface TrustedReleaseInventorySnapshot {
+  request: TrustedReleaseInventoryRequest;
+  snapshot: ReleaseInventorySnapshot;
+}
+
+export function buildTrustedReleaseInventorySnapshot(
+  input: unknown
+): TrustedReleaseInventorySnapshot {
+  const request = TrustedReleaseInventoryRequestSchema.parse(input);
+  const snapshot = buildReleaseInventorySnapshot(
+    {
+      releaseId: request.releaseId,
+      sourceCommit: request.provenance.commit,
+      systems: request.systems
+    },
+    request.capturedAt
+  );
+  return { request, snapshot };
 }

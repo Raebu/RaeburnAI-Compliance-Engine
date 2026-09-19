@@ -34,6 +34,25 @@ export class ComplianceClient {
     });
   }
 
+  async persistReleaseInventoryEvidence(inventory: unknown) {
+    return this.request('/v1/inventory/evidence', {
+      method: 'POST',
+      body: JSON.stringify(inventory)
+    });
+  }
+
+  async listReleaseInventoryEvidence() {
+    return this.request('/v1/inventory/evidence');
+  }
+
+  async getReleaseInventoryEvidence(releaseId: string) {
+    return this.request(`/v1/inventory/evidence/${encodeURIComponent(releaseId)}`);
+  }
+
+  async listReleaseInventoryExceptions() {
+    return this.request('/v1/inventory/exceptions');
+  }
+
   async buildReleaseGovernanceApplicabilitySnapshot(inventory: unknown) {
     return this.request('/v1/governance/release-applicability', {
       method: 'POST',

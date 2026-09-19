@@ -16,7 +16,7 @@ export function classifyRisk(system: AISystem): RiskLevel {
   return 'limited';
 }
 
-export function assessSystem(input: unknown): AssessmentResult {
+export function assessSystem(input: unknown, generatedAt = new Date().toISOString()): AssessmentResult {
   const system = AISystemSchema.parse(input);
   const results = rules.map(rule => {
     const passed = rule.test(system);
@@ -44,7 +44,7 @@ export function assessSystem(input: unknown): AssessmentResult {
     passed: results.filter(r => r.passed).length,
     failed: results.filter(r => !r.passed).length,
     results,
-    generatedAt: new Date().toISOString()
+    generatedAt
   };
 }
 

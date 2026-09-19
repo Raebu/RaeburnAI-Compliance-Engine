@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildReleaseInventorySnapshot } from '../src/index.js';
+import { buildReleaseInventorySnapshot, buildTrustedReleaseInventorySnapshot } from '../src/index.js';
 
 function entry(id: string, overrides: Record<string, unknown> = {}) {
   return {
@@ -108,4 +108,42 @@ describe('release AI inventory', () => {
   it('requires at least one registered AI system', () => {
     expect(() => buildReleaseInventorySnapshot({ releaseId: 'r1', systems: [] })).toThrow();
   });
+
+  it('binds trusted inventory evidence to an immutable full commit and capture time', () => {
+    const trusted = buildTrustedReleaseInventorySnapshot({
+      releaseId: 'v1.2.3',
+      capturedAt: '2026-09-19T20:00:00.000Z',
+      provenance: {
+        repository: 'https://github.com/Raebu/RaeburnAI-Chain',
+        commit: 'a'.repeat(40),
+        ref: 'refs/tags/v1.2.3',
+        producer: 'raeburnai-chain',
+        environment: 'staging'
+      },
+      systems: [entry('router')]
+    });
+
+    expect(trusted.snapshot.releaseId).toBe('v1.2.3');
+    expect(trusted.snapshot.sourceCommit).toBe('a'.repeat(40));
+    expect(trusted.snapshot.generatedAt).toBe('2026-09-19T20:00:00.000Z');
+    expect(trusted.request.provenance.environment).toBe('staging');
+  });
+
+  it('rejects abbreviated commits for trusted persisted evidence', () => {
+    expect(() =>
+      buildTrustedReleaseInventorySnapshot({
+        releaseId: 'v1.2.3',
+        capturedAt: '2026-09-19T20:00:00.000Z',
+        provenance: {
+          repository: 'https://github.com/Raebu/RaeburnAI-Chain',
+          commit: 'abcdef1234567',
+          ref: 'refs/tags/v1.2.3',
+          producer: 'raeburnai-chain',
+          environment: 'production'
+        },
+        systems: [entry('router')]
+      })
+    ).toThrow();
+  });
+
 });
