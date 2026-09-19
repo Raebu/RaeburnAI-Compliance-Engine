@@ -1,8 +1,6 @@
-name: Generate SBOM
+name: Repository SBOM
 
 on:
-  release:
-    types: [published]
   workflow_dispatch:
   push:
     branches: [main, master]
@@ -29,17 +27,18 @@ on:
 permissions:
   contents: write
   actions: read
-  id-token: write
-  attestations: write
 
 jobs:
   sbom:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
-      - uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610
+
+      - name: Generate SPDX repository SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610
         with:
           path: .
           format: spdx-json
@@ -48,8 +47,10 @@ jobs:
           dependency-snapshot: true
           upload-artifact: true
           upload-artifact-retention: 90
-          upload-release-assets: true
-      - uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610
+          upload-release-assets: false
+
+      - name: Generate CycloneDX repository SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610
         with:
           path: .
           format: cyclonedx-json
@@ -57,19 +58,4 @@ jobs:
           artifact-name: ${{ github.event.repository.name }}-${{ github.sha }}.cdx.json
           upload-artifact: true
           upload-artifact-retention: 90
-          upload-release-assets: true
-      - name: Create release bundle for attestation
-        if: github.event_name == 'release'
-        run: tar --exclude='.git' --exclude='sbom.spdx.json' --exclude='sbom.cdx.json' -czf "${{ github.event.repository.name }}-${{ github.event.release.tag_name }}.tar.gz" .
-      - name: Attest SPDX SBOM
-        if: github.event_name == 'release'
-        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d
-        with:
-          subject-path: '${{ github.event.repository.name }}-${{ github.event.release.tag_name }}.tar.gz'
-          sbom-path: sbom.spdx.json
-      - name: Attest CycloneDX SBOM
-        if: github.event_name == 'release'
-        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d
-        with:
-          subject-path: '${{ github.event.repository.name }}-${{ github.event.release.tag_name }}.tar.gz'
-          sbom-path: sbom.cdx.json
+          upload-release-assets: false
