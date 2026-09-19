@@ -16,8 +16,11 @@ export {
   InventoryComponentTypeSchema,
   InventoryControlEvidenceSchema,
   InventoryEvaluationSchema,
+  ReleaseInventoryProvenanceSchema,
   ReleaseInventoryRequestSchema,
-  buildReleaseInventorySnapshot
+  TrustedReleaseInventoryRequestSchema,
+  buildReleaseInventorySnapshot,
+  buildTrustedReleaseInventorySnapshot
 } from './inventory.js';
 export { rules } from './rules.js';
 export { AISystemSchema, FrameworkSchema, RiskLevelSchema } from './types.js';
@@ -42,8 +45,11 @@ export type {
   DeploymentState,
   InventoryComponentType,
   InventorySystemSnapshot,
+  ReleaseInventoryProvenance,
   ReleaseInventoryRequest,
-  ReleaseInventorySnapshot
+  ReleaseInventorySnapshot,
+  TrustedReleaseInventoryRequest,
+  TrustedReleaseInventorySnapshot
 } from './inventory.js';
 export type {
   AISystem,
