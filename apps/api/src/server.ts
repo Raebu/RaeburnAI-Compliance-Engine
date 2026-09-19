@@ -34,8 +34,12 @@ function httpError(statusCode: number, message: string): Error & { statusCode: n
 
 function secureBearerMatches(header: string | undefined, expectedToken: string): boolean {
   if (!header) return false;
-  const match = /^Bearer\s+(.+)$/i.exec(header.trim());
-  const supplied = match?.[1];
+  const value = header.trim();
+  const prefix = 'bearer ';
+  if (value.length <= prefix.length || value.slice(0, prefix.length).toLowerCase() !== prefix) {
+    return false;
+  }
+  const supplied = value.slice(prefix.length).trim();
   if (!supplied) return false;
   const expectedBuffer = Buffer.from(expectedToken);
   const suppliedBuffer = Buffer.from(supplied);
