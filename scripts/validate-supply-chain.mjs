@@ -51,7 +51,7 @@ read('pnpm-lock.yaml');
 const policy = read('docs/software-supply-chain.md');
 requireMarker(policy, 'docs/software-supply-chain.md', 'Critical remediation expectation', '**Critical:**');
 requireMarker(policy, 'docs/software-supply-chain.md', 'High remediation expectation', '**High:**');
-requireMarker(policy, 'docs/software-supply-chain.md', 'real-release evidence boundary', 'real release evidence');
+requireMarker(policy, 'docs/software-supply-chain.md', 'real-release evidence boundary', 'Real release evidence');
 
 const ci = read('.github/workflows/ci.yml');
 requireMarker(ci, '.github/workflows/ci.yml', 'frozen dependency installation', 'pnpm install --frozen-lockfile');
