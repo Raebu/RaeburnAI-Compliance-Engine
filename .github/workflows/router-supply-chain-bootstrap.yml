@@ -25,32 +25,64 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Generate hashed Router Python lock
+      - name: Generate hashed Router Python locks
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p generated
           python -m pip install --disable-pip-version-check --upgrade pip pip-tools pip-audit
-          pip-compile             --resolver=backtracking             --generate-hashes             --output-file generated/router-requirements.lock             bootstrap/router-requirements.in
+
+          pip-compile \
+            --resolver=backtracking \
+            --generate-hashes \
+            --output-file generated/router-requirements.lock \
+            bootstrap/router-requirements.in
+
+          pip-compile \
+            --resolver=backtracking \
+            --generate-hashes \
+            --output-file generated/router-dev.lock \
+            bootstrap/router-dev.in
+
           {
             echo "router_commit=044865054b70ce0594838ca451a1f6207d452333"
             echo "requirements_input_sha256=$(sha256sum bootstrap/router-requirements.in | awk '{print $1}')"
+            echo "dev_input_sha256=$(sha256sum bootstrap/router-dev.in | awk '{print $1}')"
             python --version
             pip-compile --version
             pip-audit --version
           } > generated/router-lock-metadata.txt
 
-      - name: Verify hashed lock and audit vulnerabilities
+      - name: Verify hashed locks and audit vulnerabilities
         id: verify
         shell: bash
         run: |
           set +e
+
           python -m venv /tmp/router-lock-verify
           /tmp/router-lock-verify/bin/python -m pip install --disable-pip-version-check --upgrade pip >/dev/null
-          /tmp/router-lock-verify/bin/python -m pip install             --disable-pip-version-check             --require-hashes             -r generated/router-requirements.lock             > generated/router-lock-install.txt 2>&1
+          /tmp/router-lock-verify/bin/python -m pip install \
+            --disable-pip-version-check \
+            --require-hashes \
+            -r generated/router-requirements.lock \
+            > generated/router-lock-install.txt 2>&1
           install_status=$?
-          pip-audit             --progress-spinner off             -r generated/router-requirements.lock             > generated/router-pip-audit.txt 2>&1
+
+          python -m venv /tmp/router-dev-verify
+          /tmp/router-dev-verify/bin/python -m pip install --disable-pip-version-check --upgrade pip >/dev/null
+          /tmp/router-dev-verify/bin/python -m pip install \
+            --disable-pip-version-check \
+            --require-hashes \
+            -r generated/router-dev.lock \
+            > generated/router-dev-install.txt 2>&1
+          dev_install_status=$?
+
+          pip-audit \
+            --progress-spinner off \
+            -r generated/router-requirements.lock \
+            > generated/router-pip-audit.txt 2>&1
           audit_status=$?
+
           set -e
           echo "install_status=$install_status" >> generated/router-lock-metadata.txt
           echo "dev_install_status=$dev_install_status" >> generated/router-lock-metadata.txt
@@ -68,7 +100,9 @@ jobs:
           digest="${repo_digest#*@}"
           test -n "$digest"
           echo "python:3.11-slim@$digest" > generated/router-python-base.txt
-          docker image inspect python:3.11-slim             --format 'id={{.Id}} architecture={{.Architecture}} os={{.Os}}'             > generated/router-python-base-metadata.txt
+          docker image inspect python:3.11-slim \
+            --format 'id={{.Id}} architecture={{.Architecture}} os={{.Os}}' \
+            > generated/router-python-base-metadata.txt
 
       - name: Persist bootstrap evidence
         shell: bash
@@ -77,8 +111,12 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add generated/
-          git commit -m "chore: generate Router supply-chain bootstrap evidence"
-          git push
+          if git diff --cached --quiet; then
+            echo "Generated evidence unchanged"
+          else
+            git commit -m "chore: generate Router supply-chain bootstrap evidence"
+            git push
+          fi
 
       - name: Enforce generated dependency evidence
         shell: bash
