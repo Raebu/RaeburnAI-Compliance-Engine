@@ -20,14 +20,6 @@ jobs:
         with:
           persist-credentials: true
 
-      - name: Checkout exact Router source
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          repository: Raebu/RaeburnAI_llm_router
-          ref: 044865054b70ce0594838ca451a1f6207d452333
-          path: router
-          persist-credentials: false
-
       - name: Set up Python 3.11
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
@@ -39,9 +31,10 @@ jobs:
           set -euo pipefail
           mkdir -p generated
           python -m pip install --disable-pip-version-check --upgrade pip pip-tools pip-audit
-          pip-compile             --resolver=backtracking             --generate-hashes             --output-file generated/router-requirements.lock             router/requirements.txt
+          pip-compile             --resolver=backtracking             --generate-hashes             --output-file generated/router-requirements.lock             bootstrap/router-requirements.in
           {
             echo "router_commit=044865054b70ce0594838ca451a1f6207d452333"
+            echo "requirements_input_sha256=$(sha256sum bootstrap/router-requirements.in | awk '{print $1}')"
             python --version
             pip-compile --version
             pip-audit --version
